@@ -21,6 +21,7 @@ import { Format } from "../format"
 import { MessageV2 } from "../session/message-v2"
 import { TuiRoute } from "./tui"
 import { Permission } from "../permission"
+import { Question } from "../question"
 import { Instance } from "../project/instance"
 import { Vcs } from "../project/vcs"
 import { Agent } from "../agent/agent"
@@ -1524,6 +1525,42 @@ export namespace Server {
             sessionID,
             permissionID,
             response: c.req.valid("json").response,
+          })
+          return c.json(true)
+        },
+      )
+      .post(
+        "/session/:sessionID/question/:questionID",
+        describeRoute({
+          summary: "Respond to question",
+          description: "Submit answers to a question set from the AI assistant.",
+          operationId: "question.respond",
+          responses: {
+            200: {
+              description: "Question response processed successfully",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+            ...errors(400, 404),
+          },
+        }),
+        validator(
+          "param",
+          z.object({
+            sessionID: z.string(),
+            questionID: z.string(),
+          }),
+        ),
+        validator("json", Question.Response),
+        async (c) => {
+          const params = c.req.valid("param")
+          Question.respond({
+            sessionID: params.sessionID,
+            questionID: params.questionID,
+            response: c.req.valid("json"),
           })
           return c.json(true)
         },

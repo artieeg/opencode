@@ -1,3 +1,4 @@
+import { AskTool } from "./ask"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
@@ -91,6 +92,7 @@ export namespace ToolRegistry {
 
     return [
       InvalidTool,
+      AskTool,
       BashTool,
       ReadTool,
       GlobTool,
@@ -154,6 +156,10 @@ export namespace ToolRegistry {
     // Disable skill tool if all skills are denied
     if (agent.permission.skill["*"] === "deny" && Object.keys(agent.permission.skill).length === 1) {
       result["skill"] = false
+    }
+    // Only enable ask tool for plan agent by default
+    if (agent.name !== "plan") {
+      result["ask"] = false
     }
 
     return result

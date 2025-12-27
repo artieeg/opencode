@@ -68,6 +68,8 @@ import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
+import { DialogQuestion } from "../../ui/dialog-question.tsx"
+import type { Question } from "@/question"
 
 addDefaultParsers(parsers.parsers)
 
@@ -109,6 +111,7 @@ export function Session() {
   const session = createMemo(() => sync.session.get(route.sessionID)!)
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const permissions = createMemo(() => sync.data.permission[route.sessionID] ?? [])
+  const questions = createMemo(() => sync.data.question[route.sessionID] ?? [])
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -939,6 +942,50 @@ export function Session() {
 
   const dialog = useDialog()
   const renderer = useRenderer()
+
+  // Track submitted question IDs to prevent re-showing dialog before API responds
+  const [submittedQuestions, setSubmittedQuestions] = createSignal<Set<string>>(new Set())
+
+  // Show question dialog when questions are pending
+  createEffect(() => {
+    const pending = questions()[0]
+    const submitted = submittedQuestions()
+
+    // Clean up submitted IDs that are no longer in the questions list
+    const currentIds = new Set(questions().map((q) => q.id))
+    const toRemove = [...submitted].filter((id) => !currentIds.has(id))
+    if (toRemove.length > 0) {
+      setSubmittedQuestions((prev) => {
+        const next = new Set(prev)
+        toRemove.forEach((id) => next.delete(id))
+        return next
+      })
+    }
+
+    if (pending && dialog.stack.length === 0 && !submitted.has(pending.id)) {
+      dialog.replace(() => (
+        <DialogQuestion
+          info={pending}
+          onSubmit={(answers) => {
+            setSubmittedQuestions((prev) => new Set([...prev, pending.id]))
+            fetch(`${sdk.url}/session/${route.sessionID}/question/${pending.id}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ answers, cancelled: false }),
+            })
+          }}
+          onCancel={() => {
+            setSubmittedQuestions((prev) => new Set([...prev, pending.id]))
+            fetch(`${sdk.url}/session/${route.sessionID}/question/${pending.id}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ answers: [], cancelled: true }),
+            })
+          }}
+        />
+      ))
+    }
+  })
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
@@ -1830,6 +1877,58 @@ ToolRegistry.register<typeof TodoWriteTool>({
           <box>
             <For each={props.input.todos ?? []}>
               {(todo) => <TodoItem status={todo.status} content={todo.content} />}
+            </For>
+          </box>
+        </Show>
+      </>
+    )
+  },
+})
+
+ToolRegistry.register({
+  name: "ask",
+  container: "block",
+  render(props: ToolProps<any>) {
+    const { theme } = useTheme()
+    const metadata = props.metadata as any
+    const questions = metadata?.questions ?? props.input?.questions ?? []
+    const answers = metadata?.answers ?? []
+    const pending = metadata?.pending
+    const cancelled = metadata?.cancelled
+
+    return (
+      <>
+        <ToolTitle icon="?" fallback="Asking questions..." when={!pending}>
+          {cancelled ? "Questions cancelled" : `Asked ${questions.length} question(s)`}
+        </ToolTitle>
+        <Show when={pending}>
+          <text fg={theme.textMuted}>Waiting for user response...</text>
+        </Show>
+        <Show when={answers.length > 0}>
+          <box paddingLeft={1}>
+            <For each={answers}>
+              {(answer: any) => {
+                const q = questions.find((q: any) => q.id === answer.questionID)
+                if (!q) return null
+                return (
+                  <box>
+                    <text fg={theme.text}>
+                      <span style={{ bold: true }}>Q:</span> {q.text}
+                    </text>
+                    <text fg={theme.textMuted}>
+                      <span style={{ bold: true }}>A:</span>{" "}
+                      {answer.skipped
+                        ? "[Skipped]"
+                        : answer.selectedOptions?.length
+                          ? answer.selectedOptions
+                              .map((id: string) => q.options?.find((o: any) => o.id === id)?.label)
+                              .filter(Boolean)
+                              .join(", ")
+                          : answer.customValue || "[No answer]"}
+                    </text>
+                  </box>
+                )
+              }}
             </For>
           </box>
         </Show>

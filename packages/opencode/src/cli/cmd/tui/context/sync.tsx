@@ -16,6 +16,7 @@ import type {
   ProviderAuthMethod,
   VcsInfo,
 } from "@opencode-ai/sdk/v2"
+import type { Question } from "@/question"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { Binary } from "@opencode-ai/util/binary"
@@ -40,6 +41,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       command: Command[]
       permission: {
         [sessionID: string]: Permission[]
+      }
+      question: {
+        [sessionID: string]: Question.Info[]
       }
       config: Config
       session: Session[]
@@ -76,6 +80,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       status: "loading",
       agent: [],
       permission: {},
+      question: {},
       command: [],
       provider: [],
       provider_default: {},
@@ -124,6 +129,42 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           if (!match.found) break
           setStore(
             "permission",
+            event.properties.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 1)
+            }),
+          )
+          break
+        }
+
+        case "question.asked": {
+          const questions = store.question[event.properties.sessionID]
+          if (!questions) {
+            setStore("question", event.properties.sessionID, [event.properties])
+            break
+          }
+          const match = Binary.search(questions, event.properties.id, (q) => q.id)
+          setStore(
+            "question",
+            event.properties.sessionID,
+            produce((draft) => {
+              if (match.found) {
+                draft[match.index] = event.properties
+                return
+              }
+              draft.push(event.properties)
+            }),
+          )
+          break
+        }
+
+        case "question.replied": {
+          const questions = store.question[event.properties.sessionID]
+          if (!questions) break
+          const match = Binary.search(questions, event.properties.questionID, (q) => q.id)
+          if (!match.found) break
+          setStore(
+            "question",
             event.properties.sessionID,
             produce((draft) => {
               draft.splice(match.index, 1)

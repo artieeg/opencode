@@ -1,0 +1,51 @@
+Use this tool to ask the user clarifying questions during planning.
+
+When to use:
+- When you need user input to make a decision
+- When there are architectural tradeoffs to consider  
+- Implementation details depend on user requirements
+- You're unsure about scope or priorities
+- You need to gather preferences before proceeding
+
+You can ask multiple questions at once. Each question can have:
+- Predefined options for the user to select from
+- Option for custom/free-form input (enabled by default)
+- Can be marked as required or optional
+- Can allow multiple selections
+
+The tool will block until the user answers all questions. The user can:
+- Select from predefined options
+- Provide custom text input
+- Skip optional questions
+- Cancel the entire form (you'll receive a cancellation message)
+
+Example usage:
+```json
+{
+  "title": "Implementation Details",
+  "questions": [
+    {
+      "id": "db_choice",
+      "text": "Which database should we use?",
+      "description": "This will affect how we structure the data layer",
+      "options": [
+        {"id": "postgres", "label": "PostgreSQL", "description": "Best for relational data"},
+        {"id": "sqlite", "label": "SQLite", "description": "Lightweight, good for local storage"}
+      ],
+      "allowCustom": true,
+      "required": true
+    },
+    {
+      "id": "auth_method",
+      "text": "What authentication method do you prefer?",
+      "options": [
+        {"id": "jwt", "label": "JWT tokens"},
+        {"id": "session", "label": "Session-based"},
+        {"id": "oauth", "label": "OAuth only"}
+      ],
+      "multiSelect": false,
+      "required": false
+    }
+  ]
+}
+```
